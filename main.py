@@ -86,13 +86,12 @@ def ps(x_r, d_h):
     
     return math.exp(-temp)
 
-
-def pso(x_r, occlusion):
+def pso(x_r, occlusion, occlusion_sum):
     """p_so - Spatial occlusion smoothness"""
-    temp = sum(lambda_(s, x_r) * linalg.norm(occlusion[tuple(x_r)] - occlusion[s])
+    temp = sum(lambda_(s, x_r) * abs(occlusion[tuple(x_r)] - occlusion[s])
                for s in neighborhood(x_r, occlusion.shape[:2]))
     
-    penalty = ALPHA * occlusion.sum()
+    penalty = ALPHA * occlusion_sum
     
     return math.exp(-temp) * math.exp(-penalty)
 
@@ -105,6 +104,7 @@ def main(im1, im2, im3):
     img = Image.new('L', (width, height), 0)
     ImageDraw.Draw(img).polygon([(679, 270), (719, 264), (742, 339), (680, 340)], outline=1, fill=0)
     occlusion = np.array(img, dtype=np.float_)
+    occlusion_sum = occlusion.sum()
     
     d_prev_x = np.genfromtxt(file('d_prev_x.csv'), delimiter=',')
     d_prev_y = np.genfromtxt(file('d_prev_y.csv'), delimiter=',')
@@ -126,7 +126,6 @@ def main(im1, im2, im3):
     w_n = rig_matte(im1.shape, [(679, 270), (719, 264), (742, 339), (680, 340)])
     w_n_1 = rig_matte(im1.shape, [(679, 273), (726, 263), (740, 334), (679, 337)])
     
-    
     results = np.zeros(im1.shape)
     rows, cols = im1.shape
     for row in xrange(rows):
@@ -141,7 +140,7 @@ def main(im1, im2, im3):
             results[row, col] = pl(tuple(x_r), tuple(x_r_prime), w_n, w_n_1, I_n, I_n_1) * \
                                 pt(tuple(x_r), tuple(x_r_prime), occlusion, w_n_1, d_h, d_prev) * \
                                 ps(x_r, d_h) * \
-                                pso(x_r, occlusion)
+                                pso(x_r, occlusion, occlusion_sum)
     
     return results
     
