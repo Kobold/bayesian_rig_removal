@@ -175,25 +175,14 @@ def main(im1, im2, im3):
     return pl_matrix * pt_matrix * ps_matrix * pso_matrix
 
 
-im1 = ndimage.imread('Forest_Gump/001.png', flatten=True)
-im2 = ndimage.imread('Forest_Gump/002.png', flatten=True)
-im3 = ndimage.imread('Forest_Gump/003.png', flatten=True)
+if __name__ == '__main__':
+    im1 = ndimage.imread('Forest_Gump/001.png', flatten=True)
+    im2 = ndimage.imread('Forest_Gump/002.png', flatten=True)
+    im3 = ndimage.imread('Forest_Gump/003.png', flatten=True)
 
-bob = main(im1, im2, im3)
+    #bob = main(im1, im2, im3)
 
-#plt.imshow(bob / bob.max(), cmap='gray')
-#plt.show()
-#import pdb
-#pdb.set_trace()
-
-
-
-
-
-
-
-
-
-
-
-
+    #plt.imshow(bob / bob.max(), cmap='gray')
+    #plt.show()
+    #import pdb
+    #pdb.set_trace()
