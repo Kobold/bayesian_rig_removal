@@ -1,6 +1,6 @@
 #!/usr/bin/python2.6
 from matplotlib import nxutils
-from scipy import ndimage
+from scipy import misc, ndimage
 from numpy import linalg
 from PIL import Image, ImageDraw
 import matplotlib.pyplot as plt
@@ -11,7 +11,11 @@ SIGMA_E = 0.01 # allowance of acceleration
 SIGMA_V = 0.01 # allowance of acceleration
 LAMBDA = 2.0
 ALPHA = 0.0331 # ~ 3 * SIGMA_V according to section 3.4
+DOWNSAMPLING = 3
 
+def downsample(arr, x=DOWNSAMPLING):
+    """Returns m x n matrix ``a`` downsampled to a (m / 2^x) x (n / 2^x) matrix."""
+    return misc.imresize(arr, 0.5 ** x, interp='bilinear', mode='F')
 
 def rig_matte((height, width), vectors):
     """
@@ -125,8 +129,8 @@ def main(im1, im2, im3):
     ImageDraw.Draw(img).polygon([(679, 270), (719, 264), (742, 339), (680, 340)], outline=1, fill=0)
     occlusion = np.array(img, dtype=np.float_)
     
-    d_prev_x = np.genfromtxt(file('d_prev_x.csv'), delimiter=',')
-    d_prev_y = np.genfromtxt(file('d_prev_y.csv'), delimiter=',')
+    d_prev_x = downsample(np.genfromtxt(file('d_prev_x.csv'), delimiter=','))
+    d_prev_y = downsample(np.genfromtxt(file('d_prev_y.csv'), delimiter=','))
     
     assert I_n.shape == d_prev_x.shape
     
@@ -176,11 +180,12 @@ def main(im1, im2, im3):
 
 
 if __name__ == '__main__':
-    im1 = ndimage.imread('Forest_Gump/001.png', flatten=True)
-    im2 = ndimage.imread('Forest_Gump/002.png', flatten=True)
-    im3 = ndimage.imread('Forest_Gump/003.png', flatten=True)
+    load = lambda fname: downsample(ndimage.imread(fname, flatten=True))
+    im1 = load('Forest_Gump/001.png')
+    im2 = load('Forest_Gump/002.png')
+    im3 = load('Forest_Gump/003.png')
 
-    #bob = main(im1, im2, im3)
+    bob = main(im1, im2, im3)
 
     #plt.imshow(bob / bob.max(), cmap='gray')
     #plt.show()
