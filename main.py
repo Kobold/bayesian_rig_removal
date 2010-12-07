@@ -165,17 +165,18 @@ def main(im1, im2, im3):
     rows, cols = im1.shape
     for row in xrange(rows):
         for col in xrange(cols):
-            x_r = np.array([row, col]) # y, x
-            x_r_prime = (x_r + d_prev[tuple(x_r)]).round() # the motion compensated site x_r + d^h_n,n-1(x_r)
+            y_motion, x_motion = d_prev[row, col]
+            y_prime = round(row + y_motion) # the motion compensated site x_r + d^h_n,n-1(x_r)
+            x_prime = round(col + x_motion)
             
-            y_prime, x_prime = x_r_prime
-            x_r_prime = np.array([min(max(0, y_prime), rows - 1),
-                                  min(max(0, x_prime), cols - 1)])
+            x_r = (row, col) # y, x
+            x_r_prime = (min(max(0, y_prime), rows - 1),
+                         min(max(0, x_prime), cols - 1))
             
-            results[row, col] = pl(tuple(x_r), tuple(x_r_prime), w_n, w_n_1, I_n, I_n_1) * \
-                                pt(tuple(x_r), tuple(x_r_prime), occlusion, w_n_1, d_h, d_prev) * \
-                                ps_matrix[tuple(x_r)] * \
-                                pso_matrix[tuple(x_r)]
+            results[row, col] = pl(x_r, x_r_prime, w_n, w_n_1, I_n, I_n_1) * \
+                                pt(x_r, x_r_prime, occlusion, w_n_1, d_h, d_prev) * \
+                                ps_matrix[x_r] * \
+                                pso_matrix[x_r]
     
     return results
     
