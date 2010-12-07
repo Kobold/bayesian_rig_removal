@@ -69,16 +69,6 @@ def pt(x_r, x_r_prime, occlusion, w_n_1, d_h, d_prev):
     
     return math.exp(-temp)
 
-
-def neighborhood((y, x), (height, width)):
-    return [(yt, xt) for xt in [x + 1, x, x - 1]
-                     for yt in [y + 1, y, y - 1]
-                     if 0 <= xt < width and 0 <= yt < height
-                     and (xt, yt) != (x, y)]
-
-def lambda_(s, x_r):
-    return LAMBDA / linalg.norm(np.array(s) - x_r)
-
 def ps(d_h):
     """p_s - Spatial motion smoothness (equation 5)
     
@@ -138,7 +128,6 @@ def main(im1, im2, im3):
     img = Image.new('L', (width, height), 0)
     ImageDraw.Draw(img).polygon([(679, 270), (719, 264), (742, 339), (680, 340)], outline=1, fill=0)
     occlusion = np.array(img, dtype=np.float_)
-    pso_matrix = pso(occlusion)
     
     d_prev_x = np.genfromtxt(file('d_prev_x.csv'), delimiter=',')
     d_prev_y = np.genfromtxt(file('d_prev_y.csv'), delimiter=',')
@@ -154,12 +143,14 @@ def main(im1, im2, im3):
     d_h = np.zeros(d_prev.shape)
     d_h[:, :, 0] = 0.0
     d_h[:, :, 1] = -1.0
-    ps_matrix = ps(d_h)
     
     # w_n - weight field for frame 3
     # w_n_1 - weight field for frame 2
     w_n = rig_matte(im1.shape, [(679, 270), (719, 264), (742, 339), (680, 340)])
     w_n_1 = rig_matte(im1.shape, [(679, 273), (726, 263), (740, 334), (679, 337)])
+    
+    ps_matrix = ps(d_h)
+    pso_matrix = pso(occlusion)
     
     results = np.zeros(im1.shape)
     rows, cols = im1.shape
