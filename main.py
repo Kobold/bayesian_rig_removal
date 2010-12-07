@@ -79,12 +79,31 @@ def neighborhood((y, x), (height, width)):
 def lambda_(s, x_r):
     return LAMBDA / linalg.norm(np.array(s) - x_r)
 
-def ps(x_r, d_h):
-    """p_s - Spatial motion smoothness (equation 5)"""
-    temp = sum(lambda_(s, x_r) * linalg.norm(d_h[tuple(x_r)] - d_h[s]) ** 2.
-               for s in neighborhood(x_r, d_h.shape[:2]))
+def ps(d_h):
+    """p_s - Spatial motion smoothness (equation 5)
     
-    return math.exp(-temp)
+    Calculates it as a batch rather than per pixel.
+    """
+    def norm(vectors):
+        return vectors[:,:,0] ** 2. + vectors[:,:,1] ** 2.
+    
+    z = np.zeros(d_h.shape[:2])
+    t1, t2, t3, t4, t5, t6, t7, t8 = [z.copy() for x in range(8)]
+    
+    t1[1:,:]  = 2. * norm(d_h[1:,:]  - d_h[:-1,:])
+    t3[:,:-1] = 2. * norm(d_h[:,:-1] - d_h[:,1:])
+    t5[:-1,:] = 2. * norm(d_h[:-1,:] - d_h[1:,:])
+    t7[:,1:]  = 2. * norm(d_h[:,1:]  - d_h[:,:-1])
+    
+    t2[1:,:-1]  = 1.4142135623730949 * norm(d_h[1:,:-1]  - d_h[:-1,1:])
+    t4[:-1,:-1] = 1.4142135623730949 * norm(d_h[:-1,:-1] - d_h[1:,1:])
+    t6[:-1,1:]  = 1.4142135623730949 * norm(d_h[:-1,1:]  - d_h[1:,:-1])
+    t8[1:,1:]   = 1.4142135623730949 * norm(d_h[1:,1:]   - d_h[:-1,:-1])
+    
+    temp = t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8
+    
+    return np.exp(-temp)
+    
 
 def pso(occlusion):
     """p_so - Spatial occlusion smoothness
@@ -132,9 +151,10 @@ def main(im1, im2, im3):
     d_prev[:, :, 1] = d_prev_x
     
     # ghetto build of estimate hidden motion
-    d_h = np.zeros(list(d_prev_x.shape) + [2])
+    d_h = np.zeros(d_prev.shape)
     d_h[:, :, 0] = 0.0
     d_h[:, :, 1] = -1.0
+    ps_matrix = ps(d_h)
     
     # w_n - weight field for frame 3
     # w_n_1 - weight field for frame 2
@@ -154,7 +174,7 @@ def main(im1, im2, im3):
             
             results[row, col] = pl(tuple(x_r), tuple(x_r_prime), w_n, w_n_1, I_n, I_n_1) * \
                                 pt(tuple(x_r), tuple(x_r_prime), occlusion, w_n_1, d_h, d_prev) * \
-                                ps(x_r, d_h) * \
+                                ps_matrix[tuple(x_r)] * \
                                 pso_matrix[tuple(x_r)]
     
     return results
