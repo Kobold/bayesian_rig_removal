@@ -23,7 +23,7 @@ def rig_matte((height, width), vectors):
     return np.array(img, dtype=np.float_)
 
 
-def pl(d_prev, w_n, w_n_1, I_n, I_n_1):
+def pl(w_n, w_compensated, I_n, I_compensated):
     """p_l - Image data likelihood (equation 3)
     
     x_r
@@ -38,30 +38,16 @@ def pl(d_prev, w_n, w_n_1, I_n, I_n_1):
         frame at n
     I_n_1: I_n-1
         frame at n-1
-    """
-    rows, cols = d_prev.shape[:2]
-    w_compensated = np.zeros((rows, cols))
-    I_compensated = np.zeros((rows, cols))
-    
-    for row in xrange(rows):
-        for col in xrange(cols):
-            y_motion, x_motion = d_prev[row, col]
-            y_prime = round(row + y_motion) # the motion compensated site x_r + d^h_n,n-1(x_r)
-            x_prime = round(col + x_motion)
-            
-            x_r = (row, col) # y, x
-            x_r_prime = (min(max(0, y_prime), rows - 1),
-                         min(max(0, x_prime), cols - 1))
-            
-            w_compensated[x_r] = w_n_1[x_r_prime]
-            I_compensated[x_r] = I_n_1[x_r_prime]
-    
+    """    
     temp = (1. / (2. * (SIGMA_E ** 2.))) * w_n * w_compensated * \
            (I_n - I_compensated) ** 2.
     
     return np.exp(-temp)
 
-def pt(x_r, x_r_prime, occlusion, w_n_1, d_h, d_prev):
+def norm(vectors):
+    return vectors[:,:,0] ** 2. + vectors[:,:,1] ** 2.
+
+def pt(occlusion, w_compensated, d_h, d_prev_compensated):
     """p_t - Temporal smoothness (equation 4)
     
     x_r:
@@ -77,21 +63,16 @@ def pt(x_r, x_r_prime, occlusion, w_n_1, d_h, d_prev):
     d_prev: d_n-1,n-2
         vector matrix with the motion mapping from frame n-1 to frame n-2
     """
-    temp = (1. / SIGMA_V ** 2.) * \
-           (1 - occlusion[x_r]) * \
-           w_n_1[x_r_prime] * \
-           linalg.norm(d_h[x_r] - d_prev[x_r_prime]) ** 2.
+    temp = (1. / SIGMA_V ** 2.) * (1. - occlusion) * w_compensated * \
+           norm(d_h - d_prev_compensated)
     
-    return math.exp(-temp)
+    return np.exp(-temp)
 
 def ps(d_h):
     """p_s - Spatial motion smoothness (equation 5)
     
     Calculates it as a batch rather than per pixel.
     """
-    def norm(vectors):
-        return vectors[:,:,0] ** 2. + vectors[:,:,1] ** 2.
-    
     z = np.zeros(d_h.shape[:2])
     t1, t2, t3, t4, t5, t6, t7, t8 = [z.copy() for x in range(8)]
     
@@ -164,11 +145,12 @@ def main(im1, im2, im3):
     w_n = rig_matte(im1.shape, [(679, 270), (719, 264), (742, 339), (680, 340)])
     w_n_1 = rig_matte(im1.shape, [(679, 273), (726, 263), (740, 334), (679, 337)])
     
-    pl_matrix = pl(d_prev, w_n, w_n_1, I_n, I_n_1)
-    ps_matrix = ps(d_h)
-    pso_matrix = pso(occlusion)
+    # compute versions of various matrices compensated by d_prev.
+    # this is expensive so we make sure to only do this loop once
+    d_prev_compensated = np.zeros(d_prev.shape)
+    I_compensated = np.zeros(im1.shape)
+    w_compensated = np.zeros(im1.shape)
     
-    results = np.zeros(im1.shape)
     rows, cols = im1.shape
     for row in xrange(rows):
         for col in xrange(cols):
@@ -180,31 +162,17 @@ def main(im1, im2, im3):
             x_r_prime = (min(max(0, y_prime), rows - 1),
                          min(max(0, x_prime), cols - 1))
             
-            results[row, col] = pl_matrix[x_r] * \
-                                pt(x_r, x_r_prime, occlusion, w_n_1, d_h, d_prev) * \
-                                ps_matrix[x_r] * \
-                                pso_matrix[x_r]
+            d_prev_compensated[x_r] = d_prev[x_r_prime]
+            I_compensated[x_r] = I_n_1[x_r_prime]
+            w_compensated[x_r] = w_n_1[x_r_prime]
     
-    return results
+    # compute the probability equations
+    pl_matrix = pl(w_n, w_compensated, I_n, I_compensated)
+    pt_matrix = pt(occlusion, w_compensated, d_h, d_prev_compensated)
+    ps_matrix = ps(d_h)
+    pso_matrix = pso(occlusion)
     
-    
-"""
-%Code
-for i = 1:rows
-    for j = 1:cols
-        x_r = [i, j];
-        
-        p = (pl(x_r, w_n, w_n_1, d_h, I_n, I_n_1).* ...
-        pt(x_r, occlusion, w_n_1, d_h, d_prev)) * ...
-        ps(x_r, d_prev, d_prev) * ...
-        pso(x_r, occlusion);
-        
-        p = ((pl(x_r, w_n, w_n_1, d_prev, I_n, I_n_1).*pt(x_r, occlusion, w_n_1, d_prev, d_prev)) * ps(x_r, d_prev, d_prev) * pso(x_r, occlusion));
-    end
-end    
-
-end
-"""
+    return pl_matrix * pt_matrix * ps_matrix * pso_matrix
 
 
 im1 = ndimage.imread('Forest_Gump/001.png', flatten=True)
