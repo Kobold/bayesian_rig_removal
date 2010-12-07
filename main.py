@@ -23,7 +23,7 @@ def rig_matte((height, width), vectors):
     return np.array(img, dtype=np.float_)
 
 
-def pl(x_r, x_r_prime, w_n, w_n_1, I_n, I_n_1):
+def pl(d_prev, w_n, w_n_1, I_n, I_n_1):
     """p_l - Image data likelihood (equation 3)
     
     x_r
@@ -39,12 +39,27 @@ def pl(x_r, x_r_prime, w_n, w_n_1, I_n, I_n_1):
     I_n_1: I_n-1
         frame at n-1
     """
-    temp = (1. / (2. * (SIGMA_E ** 2.))) * \
-           w_n[x_r] * \
-           w_n_1[x_r_prime] * \
-           ((I_n[x_r] - I_n_1[x_r_prime]) ** 2.)
+    rows, cols = d_prev.shape[:2]
+    w_compensated = np.zeros((rows, cols))
+    I_compensated = np.zeros((rows, cols))
     
-    return math.exp(-temp)
+    for row in xrange(rows):
+        for col in xrange(cols):
+            y_motion, x_motion = d_prev[row, col]
+            y_prime = round(row + y_motion) # the motion compensated site x_r + d^h_n,n-1(x_r)
+            x_prime = round(col + x_motion)
+            
+            x_r = (row, col) # y, x
+            x_r_prime = (min(max(0, y_prime), rows - 1),
+                         min(max(0, x_prime), cols - 1))
+            
+            w_compensated[x_r] = w_n_1[x_r_prime]
+            I_compensated[x_r] = I_n_1[x_r_prime]
+    
+    temp = (1. / (2. * (SIGMA_E ** 2.))) * w_n * w_compensated * \
+           (I_n - I_compensated) ** 2.
+    
+    return np.exp(-temp)
 
 def pt(x_r, x_r_prime, occlusion, w_n_1, d_h, d_prev):
     """p_t - Temporal smoothness (equation 4)
@@ -149,6 +164,7 @@ def main(im1, im2, im3):
     w_n = rig_matte(im1.shape, [(679, 270), (719, 264), (742, 339), (680, 340)])
     w_n_1 = rig_matte(im1.shape, [(679, 273), (726, 263), (740, 334), (679, 337)])
     
+    pl_matrix = pl(d_prev, w_n, w_n_1, I_n, I_n_1)
     ps_matrix = ps(d_h)
     pso_matrix = pso(occlusion)
     
@@ -164,7 +180,7 @@ def main(im1, im2, im3):
             x_r_prime = (min(max(0, y_prime), rows - 1),
                          min(max(0, x_prime), cols - 1))
             
-            results[row, col] = pl(x_r, x_r_prime, w_n, w_n_1, I_n, I_n_1) * \
+            results[row, col] = pl_matrix[x_r] * \
                                 pt(x_r, x_r_prime, occlusion, w_n_1, d_h, d_prev) * \
                                 ps_matrix[x_r] * \
                                 pso_matrix[x_r]
@@ -197,7 +213,7 @@ im3 = ndimage.imread('Forest_Gump/003.png', flatten=True)
 
 bob = main(im1, im2, im3)
 
-#plt.imshow(im1, cmap='gray')
+#plt.imshow(bob / bob.max(), cmap='gray')
 #plt.show()
 #import pdb
 #pdb.set_trace()
