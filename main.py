@@ -86,14 +86,29 @@ def ps(x_r, d_h):
     
     return math.exp(-temp)
 
-def pso(x_r, occlusion, occlusion_sum):
-    """p_so - Spatial occlusion smoothness"""
-    temp = sum(lambda_(s, x_r) * abs(occlusion[tuple(x_r)] - occlusion[s])
-               for s in neighborhood(x_r, occlusion.shape[:2]))
+def pso(occlusion):
+    """p_so - Spatial occlusion smoothness
     
-    penalty = ALPHA * occlusion_sum
+    Calculates it as a batch rather than per pixel.
+    """
+    z = np.zeros(occlusion.shape)
+    t1, t2, t3, t4, t5, t6, t7, t8 = [z.copy() for x in range(8)]
     
-    return math.exp(-temp) * math.exp(-penalty)
+    t1[1:,:]  = 2. * abs(occlusion[1:,:]  - occlusion[:-1,:])
+    t3[:,:-1] = 2. * abs(occlusion[:,:-1] - occlusion[:,1:])
+    t5[:-1,:] = 2. * abs(occlusion[:-1,:] - occlusion[1:,:])
+    t7[:,1:]  = 2. * abs(occlusion[:,1:]  - occlusion[:,:-1])
+    
+    t2[1:,:-1]  = 1.4142135623730949 * abs(occlusion[1:,:-1]  - occlusion[:-1,1:])
+    t4[:-1,:-1] = 1.4142135623730949 * abs(occlusion[:-1,:-1] - occlusion[1:,1:])
+    t6[:-1,1:]  = 1.4142135623730949 * abs(occlusion[:-1,1:]  - occlusion[1:,:-1])
+    t8[1:,1:]   = 1.4142135623730949 * abs(occlusion[1:,1:]   - occlusion[:-1,:-1])
+    
+    temp = t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8
+    
+    penalty = ALPHA * occlusion.sum()
+    
+    return math.exp(-penalty) * np.exp(-temp)
 
 def main(im1, im2, im3):
     I_n = im3
@@ -104,7 +119,7 @@ def main(im1, im2, im3):
     img = Image.new('L', (width, height), 0)
     ImageDraw.Draw(img).polygon([(679, 270), (719, 264), (742, 339), (680, 340)], outline=1, fill=0)
     occlusion = np.array(img, dtype=np.float_)
-    occlusion_sum = occlusion.sum()
+    pso_matrix = pso(occlusion)
     
     d_prev_x = np.genfromtxt(file('d_prev_x.csv'), delimiter=',')
     d_prev_y = np.genfromtxt(file('d_prev_y.csv'), delimiter=',')
@@ -140,7 +155,7 @@ def main(im1, im2, im3):
             results[row, col] = pl(tuple(x_r), tuple(x_r_prime), w_n, w_n_1, I_n, I_n_1) * \
                                 pt(tuple(x_r), tuple(x_r_prime), occlusion, w_n_1, d_h, d_prev) * \
                                 ps(x_r, d_h) * \
-                                pso(x_r, occlusion, occlusion_sum)
+                                pso_matrix[tuple(x_r)]
     
     return results
     
