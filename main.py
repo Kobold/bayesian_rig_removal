@@ -11,7 +11,7 @@ SIGMA_E = 0.01 # allowance of acceleration
 SIGMA_V = 0.01 # allowance of acceleration
 LAMBDA = 2.0
 ALPHA = 0.0331 # ~ 3 * SIGMA_V according to section 3.4
-DOWNSAMPLING = 3
+DOWNSAMPLING = 0
 
 def downsample(arr, x=DOWNSAMPLING):
     """Returns m x n matrix ``a`` downsampled to a (m / 2^x) x (n / 2^x) matrix."""
@@ -129,15 +129,8 @@ def main(im1, im2, im3):
     ImageDraw.Draw(img).polygon([(679, 270), (719, 264), (742, 339), (680, 340)], outline=1, fill=0)
     occlusion = np.array(img, dtype=np.float_)
     
-    d_prev_x = downsample(np.genfromtxt(file('d_prev_x.csv'), delimiter=','))
-    d_prev_y = downsample(np.genfromtxt(file('d_prev_y.csv'), delimiter=','))
-    
-    assert I_n.shape == d_prev_x.shape
-    
-    # make a 3d height x width x 2 matrix to hold the vectors
-    d_prev = np.zeros(list(d_prev_x.shape) + [2])
-    d_prev[:, :, 0] = d_prev_y # note, this y here is correct--and it's important it be this order
-    d_prev[:, :, 1] = d_prev_x
+    d_prev = load_d_prev()
+    assert I_n.shape == d_prev.shape[:2]
     
     # ghetto build of estimate hidden motion
     d_h = np.zeros(d_prev.shape)
@@ -178,6 +171,59 @@ def main(im1, im2, im3):
     
     return pl_matrix * pt_matrix * ps_matrix * pso_matrix
 
+def load_d_prev():
+    """Loads the d_n-1,n-2 matrix from csv files. Returns a height x width x 2 matrix."""
+    d_prev_x = downsample(np.genfromtxt(file('d_prev_x.csv'), delimiter=','))
+    d_prev_y = downsample(np.genfromtxt(file('d_prev_y.csv'), delimiter=','))
+
+    # make a 3d height x width x 2 matrix to hold the vectors
+    d_prev = np.zeros(list(d_prev_x.shape) + [2])
+    d_prev[:, :, 0] = d_prev_y # note, this y here is correct--and it's important it be this order
+    d_prev[:, :, 1] = d_prev_x
+    return d_prev
+
+def vector_weighted_average(vf, weights):
+    """Returns the average vector of vector field ``vf``."""
+    weights_sum = weights.sum()
+    y_average = (vf[:,:,0] * weights).sum() / weights_sum
+    x_average = (vf[:,:,1] * weights).sum() / weights_sum
+    return np.array([y_average, x_average])
+
+def bounding_box(vertices, (height, width), extend=5):
+    """Returns the bounding box of ``vertices`` plus some boundary ``extend``.
+    
+    Returned bounding box has format (x_min, x_max, y_min, y_max)
+    """
+    x_min = min(x for x, y in vertices) - extend
+    x_max = max(x for x, y in vertices) + extend
+    y_min = min(y for x, y in vertices) - extend
+    y_max = max(y for x, y in vertices) + extend
+    
+    return max(x_min, 0), min(x_max, width), max(y_min, 0), min(y_max, height)
+
+def spatial_interpolation_vector(d, rig_vertices):
+    """Returns the vector for all the spatially interpolated candidates. (section 4.2)
+    
+    Note that this uses the second, ghetto, method of assuming everything behind the rig moves with
+    one motion.
+    """
+    shape = d.shape[:2]
+    x_min, x_max, y_min, y_max = bounding_box(rig_vertices, shape)
+    matte = rig_matte(shape, vertices)
+    return vector_weighted_average(d[y_min:y_max, x_min:x_max],
+                                   matte[y_min:y_max, x_min:x_max])
+
+
+#
+# Tools
+#
+
+def vector_display(vf):
+    """Draws the vector field magnitudes of ``vf``."""
+    vf_mag = np.sqrt(norm(vf))
+    plt.imshow(vf_mag / vf_mag.max(), cmap='gray', interpolation='nearest')
+    plt.show()
+
 
 if __name__ == '__main__':
     load = lambda fname: downsample(ndimage.imread(fname, flatten=True))
@@ -185,7 +231,14 @@ if __name__ == '__main__':
     im2 = load('Forest_Gump/002.png')
     im3 = load('Forest_Gump/003.png')
 
-    bob = main(im1, im2, im3)
+    a = np.array(range(3*3)).reshape((3, 3))
+    
+    # calculate spatial interpolation vector
+    vertices = [(679, 270), (719, 264), (742, 339), (680, 340)]
+    d_prev = load_d_prev()
+    print spatial_interpolation_vector(d_prev, vertices)
+    
+    #bob = main(im1, im2, im3)
 
     #plt.imshow(bob / bob.max(), cmap='gray')
     #plt.show()
