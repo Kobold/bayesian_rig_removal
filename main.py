@@ -330,9 +330,9 @@ if __name__ == '__main__':
     candidates = np.empty(shape, dtype=object)
     for index, y in np.ndenumerate(candidates):
         candidates[index] = [siv]
+    print 'candidate # =', sum(len(x) for x in candidates.flat)
     
     # find temporal interpolation candidates (section 4.3)
-    print 'candidate # =', sum(len(x) for x in candidates.flat)
     d_prev = load_d('vel_002_001')
     bounds = bounding_box(vertices, shape)
     temporal_interpolation_vectors(d_prev, candidates, bounds)
@@ -342,7 +342,7 @@ if __name__ == '__main__':
     # w_n - weight field for frame 3
     # w_n_1 - weight field for frame 2
     print 'adding additional candidates'
-    w_n = rig_matte(shape, [(679, 270), (719, 264), (742, 339), (680, 340)])
+    w_n = rig_matte(shape, vertices)
     w_n_1 = rig_matte(shape, [(679, 273), (726, 263), (740, 334), (679, 337)])
     for x_r in index_iterator(bounds):
         if w_n[x_r] == 1:
@@ -350,13 +350,12 @@ if __name__ == '__main__':
             for s in neighborhood(x_r, shape):
                 if w_n[s] < 1:
                     candidates[s].append(candidate)
-    print 'finished adding additional candidates'
     print 'candidate # =', sum(len(x) for x in candidates.flat)
     
     # candidate evaluation (section 4.4)
     occluded = np.logical_not(rig_matte(shape, vertices, dtype=bool))
     new_occluded = occluded.copy()
-    perturb = np.random.randn(*d_prev.shape) / 4.
+    perturb = np.random.randn(*d_prev.shape) / 6.
     d_h = np.where(np.dstack((occluded, occluded)),
                    np.tile(siv, list(shape) + [1]) + perturb, # initialize with spatial interp
                    displacement)
@@ -432,7 +431,5 @@ if __name__ == '__main__':
     #plt.show()
     #import pdb
     #pdb.set_trace()
-    
-    a = np.array(range(3*3)).reshape((3, 3))
     
     
