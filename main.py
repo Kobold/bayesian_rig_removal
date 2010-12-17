@@ -243,9 +243,9 @@ if __name__ == '__main__':
     a = np.array(range(3*3)).reshape((3, 3))
     
     # calculate spatial interpolation vector
+    displacement = load_d('vel_003_004')
     vertices = [(679, 270), (719, 264), (742, 339), (680, 340)]
-    d_prev = load_d('vel_002_001')
-    siv = spatial_interpolation_vector(d_prev, vertices)
+    siv = spatial_interpolation_vector(displacement, vertices)
     
     # initialize the candidates for the motion with the spatial interpolation
     candidates = np.empty(im1.shape, dtype=object)
@@ -253,7 +253,11 @@ if __name__ == '__main__':
         candidates[index] = [siv]
     
     print 'candidate # =', sum(len(x) for x in candidates.flat)
+    d_prev = load_d('vel_002_001')
     temporal_interpolation_vectors(d_prev, candidates)
+    print 'candidate # =', sum(len(x) for x in candidates.flat)
+    d_next = load_d('vel_004_005')
+    temporal_interpolation_vectors(d_next, candidates)
     print 'candidate # =', sum(len(x) for x in candidates.flat)
     
     #bob = main(im1, im2, im3)
