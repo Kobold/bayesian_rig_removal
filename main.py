@@ -317,12 +317,11 @@ def index_iterator((x_min, x_max, y_min, y_max)):
         for col in xrange(x_min, x_max):
             yield (row, col)
 
-if __name__ == '__main__':
-    displacement = load_d('vel_003_002')
-    shape = displacement.shape[:2]
+def reconstruct_frame(displacement, d_prev, vertices, w_n, w_n_1, I_n, I_n_1):
+    shape = I_n.shape
+    bounds = bounding_box(vertices, shape)
     
     # calculate spatial interpolation vector (section 4.2)
-    vertices = [(679, 270), (719, 264), (742, 339), (680, 340)]
     siv = spatial_interpolation_vector(displacement, vertices)
     
     # initialize the candidates for the motion with the spatial interpolation
@@ -333,17 +332,11 @@ if __name__ == '__main__':
     print 'candidate # =', sum(len(x) for x in candidates.flat)
     
     # find temporal interpolation candidates (section 4.3)
-    d_prev = load_d('vel_002_001')
-    bounds = bounding_box(vertices, shape)
     temporal_interpolation_vectors(d_prev, candidates, bounds)
     print 'candidate # =', sum(len(x) for x in candidates.flat)
     
     # add adjacent neighbors as candidates if they've been assigned
-    # w_n - weight field for frame 3
-    # w_n_1 - weight field for frame 2
     print 'adding additional candidates'
-    w_n = rig_matte(shape, vertices)
-    w_n_1 = rig_matte(shape, [(679, 273), (726, 263), (740, 334), (679, 337)])
     for x_r in index_iterator(bounds):
         if w_n[x_r] == 1:
             candidate = displacement[x_r]
@@ -354,17 +347,13 @@ if __name__ == '__main__':
     
     # candidate evaluation (section 4.4)
     occluded = np.logical_not(rig_matte(shape, vertices, dtype=bool))
-    new_occluded = occluded.copy()
     perturb = np.random.randn(*d_prev.shape) / 6.
     d_h = np.where(np.dstack((occluded, occluded)),
                    np.tile(siv, list(shape) + [1]) + perturb, # initialize with spatial interp
                    displacement)
+    
+    new_occluded = occluded.copy()
     new_d_h = d_h.copy()
-    
-    load = lambda fname: ndimage.imread(fname, flatten=True) / 255.
-    im2 = load('Forest_Gump/002.png')
-    im3 = load('Forest_Gump/003.png')
-    
     is_rig = occluded.copy()
     while True:
         for x_r in index_iterator(bounds):
@@ -395,11 +384,6 @@ if __name__ == '__main__':
                         minimum_energy = e1
                         best_candidate = candidate
                         best_is_occluded = True
-                    
-                    #if e0 < e1:
-                    #    print x_r, d_h[x_r], '->', candidate, min(e0, e1)
-                    #    print '\t', 'e0 = %f + %f + %f + %f = %f' % (el, e0t, es, e0o, e0)
-                    #    print '\t', 'e1 = %f + %f + %f + %f = %f' % (el, e1t, es, e1o, e1)
             
                 if best_candidate is not None:
                     new_d_h[x_r] = best_candidate
@@ -415,11 +399,31 @@ if __name__ == '__main__':
         d_h = new_d_h
     
     # reconstruct that shizzle
-    I_h = im3.copy()
+    I_h = I_n.copy()
     for x_r in index_iterator(bounds):
         if is_rig[x_r]:
             x_r_prime = tuple((np.array(x_r) + d_h[x_r]).round())
-            I_h[x_r] = (w_n[x_r] * im3[x_r] + w_n_1[x_r_prime] * im2[x_r_prime]) / (w_n[x_r] + w_n_1[x_r_prime])
+            I_h[x_r] = (w_n[x_r] * I_n[x_r] + w_n_1[x_r_prime] * I_n_1[x_r_prime]) / (w_n[x_r] + w_n_1[x_r_prime])
+    
+    return I_h
+    
+    
+
+if __name__ == '__main__':
+    load = lambda fname: ndimage.imread(fname, flatten=True) / 255.
+    im2 = load('Forest_Gump/002.png')
+    im3 = load('Forest_Gump/003.png')
+    
+    shape = im3.shape
+    vertices = [(679, 270), (719, 264), (742, 339), (680, 340)]
+    bob = reconstruct_frame(
+        load_d('vel_003_002'),
+        load_d('vel_002_001'),
+        vertices,
+        rig_matte(shape, vertices),
+        rig_matte(shape, [(679, 273), (726, 263), (740, 334), (679, 337)]),
+        im3,
+        im2)
     
     #load = lambda fname: downsample(ndimage.imread(fname, flatten=True))
     #im1 = load('Forest_Gump/001.png')
