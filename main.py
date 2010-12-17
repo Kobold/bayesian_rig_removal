@@ -213,11 +213,11 @@ def spatial_interpolation_vector(d, rig_vertices):
     return vector_weighted_average(d[y_min:y_max, x_min:x_max],
                                    matte[y_min:y_max, x_min:x_max])
 
-def temporal_interpolation_vectors(d_prev, candidates):
+def temporal_interpolation_vectors(d_prev, candidates, bounds):
     assert d_prev.shape[:2] == candidates.shape
     
     rows, cols = candidates.shape
-    for index, _ in np.ndenumerate(candidates):
+    for index in index_iterator(bounds):
         c_row, c_col = np.array(index) - d_prev[index]
         if 0 <= c_row < rows and 0 <= c_col < cols:
             candidates[c_row, c_col].append(d_prev[index])
@@ -326,6 +326,7 @@ if __name__ == '__main__':
     siv = spatial_interpolation_vector(displacement, vertices)
     
     # initialize the candidates for the motion with the spatial interpolation
+    print 'initializing candidates'
     candidates = np.empty(shape, dtype=object)
     for index, y in np.ndenumerate(candidates):
         candidates[index] = [siv]
@@ -333,7 +334,8 @@ if __name__ == '__main__':
     # find temporal interpolation candidates (section 4.3)
     print 'candidate # =', sum(len(x) for x in candidates.flat)
     d_prev = load_d('vel_002_001')
-    temporal_interpolation_vectors(d_prev, candidates)
+    bounds = bounding_box(vertices, shape)
+    temporal_interpolation_vectors(d_prev, candidates, bounds)
     print 'candidate # =', sum(len(x) for x in candidates.flat)
     
     # add adjacent neighbors as candidates if they've been assigned
@@ -342,7 +344,6 @@ if __name__ == '__main__':
     print 'adding additional candidates'
     w_n = rig_matte(shape, [(679, 270), (719, 264), (742, 339), (680, 340)])
     w_n_1 = rig_matte(shape, [(679, 273), (726, 263), (740, 334), (679, 337)])
-    bounds = bounding_box(vertices, shape)
     for x_r in index_iterator(bounds):
         if w_n[x_r] == 1:
             candidate = displacement[x_r]
