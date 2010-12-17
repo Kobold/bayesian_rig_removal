@@ -243,7 +243,7 @@ if __name__ == '__main__':
     a = np.array(range(3*3)).reshape((3, 3))
     
     # calculate spatial interpolation vector
-    displacement = load_d('vel_003_004')
+    displacement = load_d('vel_003_002')
     vertices = [(679, 270), (719, 264), (742, 339), (680, 340)]
     siv = spatial_interpolation_vector(displacement, vertices)
     
@@ -255,9 +255,6 @@ if __name__ == '__main__':
     print 'candidate # =', sum(len(x) for x in candidates.flat)
     d_prev = load_d('vel_002_001')
     temporal_interpolation_vectors(d_prev, candidates)
-    print 'candidate # =', sum(len(x) for x in candidates.flat)
-    d_next = load_d('vel_004_005')
-    temporal_interpolation_vectors(d_next, candidates)
     print 'candidate # =', sum(len(x) for x in candidates.flat)
     
     #bob = main(im1, im2, im3)
