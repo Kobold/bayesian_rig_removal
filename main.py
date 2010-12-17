@@ -249,7 +249,7 @@ def E_l(x_r, x_r_prime, w_n, w_n_1, I_n, I_n_1):
     
     return temp
 
-def E_0_t(x_r, x_r_prime, w_n_1, d_h, d_prev):
+def E_0_t(x_r, x_r_prime, w_n_1, candidate, d_prev):
     """E_0_t - Temporal smoothness (equation 9)
 
     x_r:
@@ -267,7 +267,7 @@ def E_0_t(x_r, x_r_prime, w_n_1, d_h, d_prev):
     """
     temp = (1. / SIGMA_V ** 2.) * \
            w_n_1[x_r_prime] * \
-           linalg.norm(d_h[x_r] - d_prev[x_r_prime]) ** 2.
+           linalg.norm(candidate - d_prev[x_r_prime]) ** 2.
 
     return temp
 
@@ -280,9 +280,9 @@ def neighborhood((y, x), (height, width)):
 def lambda_(s, x_r):
     return LAMBDA / linalg.norm(np.array(s) - np.array(x_r))
 
-def E_s(x_r, d_h):
+def E_s(x_r, candidate, d_h):
     """E_s - Spatial motion smoothness (equation 9)"""
-    temp = sum(lambda_(s, x_r) * linalg.norm(d_h[x_r] - d_h[s]) ** 2.
+    temp = sum(lambda_(s, x_r) * linalg.norm(candidate - d_h[s]) ** 2.
                for s in neighborhood(x_r, d_h.shape[:2]))
 
     return temp
@@ -335,8 +335,9 @@ if __name__ == '__main__':
     # candidate evaluation (section 4.4)
     occluded = np.logical_not(rig_matte(shape, vertices, dtype=bool))
     new_occluded = occluded.copy()
+    perturb = np.random.randn(*d_prev.shape) / 4.
     d_h = np.where(np.dstack((occluded, occluded)),
-                   np.tile(siv, list(shape) + [1]), # initialize with spatial interp
+                   np.tile(siv, list(shape) + [1]) + perturb, # initialize with spatial interp
                    displacement)
     new_d_h = d_h.copy()
     
@@ -366,9 +367,9 @@ if __name__ == '__main__':
                         x_r_prime = tuple((np.array(x_r) + candidate).round())
                     
                         el = E_l(x_r, x_r_prime, w_n, w_n_1, im3, im2)
-                        e0t = E_0_t(x_r, x_r_prime, w_n_1, d_h, d_prev)
+                        e0t = E_0_t(x_r, x_r_prime, w_n_1, candidate, d_prev)
                         e1t = ALPHA
-                        es = E_s(x_r, d_h)
+                        es = E_s(x_r, candidate, d_h)
                         e0o = E_0_o(x_r, occluded)
                         e1o = E_1_o(x_r, occluded)
                     
@@ -383,15 +384,18 @@ if __name__ == '__main__':
                             minimum_energy = e1
                             best_candidate = candidate
                             best_is_occluded = True
-                    
-                        #print x_r, d_h[x_r], '->', candidate, min(e0, e1)
-                        #print '\t', 'e0 = %f + %f + %f + %f = %f' % (el, e0t, es, e0o, e0)
-                        #print '\t', 'e1 = %f + %f + %f + %f = %f' % (el, e1t, es, e1o, e1)
+                        
+                        #if e0 < e1:
+                        #    print x_r, d_h[x_r], '->', candidate, min(e0, e1)
+                        #    print '\t', 'e0 = %f + %f + %f + %f = %f' % (el, e0t, es, e0o, e0)
+                        #    print '\t', 'e1 = %f + %f + %f + %f = %f' % (el, e1t, es, e1o, e1)
                 
                     if best_candidate is not None:
                         new_d_h[x_r] = best_candidate
                         new_occluded[x_r] = best_is_occluded
         
+        print 'occluded changed:', (occluded != new_occluded).sum()
+        print 'd_h changed:', (d_h != new_d_h).sum()
         if (occluded == new_occluded).all() and (d_h == new_d_h).all():
             break
         
