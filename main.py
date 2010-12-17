@@ -332,6 +332,24 @@ if __name__ == '__main__':
     temporal_interpolation_vectors(d_prev, candidates)
     print 'candidate # =', sum(len(x) for x in candidates.flat)
     
+    # add adjacent neighbors as candidates if they've been assigned
+    # w_n - weight field for frame 3
+    # w_n_1 - weight field for frame 2
+    print 'adding additional candidates'
+    w_n = rig_matte(shape, [(679, 270), (719, 264), (742, 339), (680, 340)])
+    w_n_1 = rig_matte(shape, [(679, 273), (726, 263), (740, 334), (679, 337)])
+    x_min, x_max, y_min, y_max = bounding_box(vertices, shape)
+    for row in xrange(y_min, y_max):
+        for col in xrange(x_min, x_max):
+            x_r = (row, col)
+            if w_n[x_r] == 1:
+                candidate = displacement[x_r]
+                for s in neighborhood(x_r, shape):
+                    if w_n[s] < 1:
+                        candidates[s].append(candidate)
+    print 'finished adding additional candidates'
+    print 'candidate # =', sum(len(x) for x in candidates.flat)
+    
     # candidate evaluation (section 4.4)
     occluded = np.logical_not(rig_matte(shape, vertices, dtype=bool))
     new_occluded = occluded.copy()
@@ -341,18 +359,11 @@ if __name__ == '__main__':
                    displacement)
     new_d_h = d_h.copy()
     
-    # w_n - weight field for frame 3
-    # w_n_1 - weight field for frame 2
-    w_n = rig_matte(shape, [(679, 270), (719, 264), (742, 339), (680, 340)])
-    w_n_1 = rig_matte(shape, [(679, 273), (726, 263), (740, 334), (679, 337)])
-    
     load = lambda fname: ndimage.imread(fname, flatten=True) / 255.
     im2 = load('Forest_Gump/002.png')
     im3 = load('Forest_Gump/003.png')
     
     is_rig = occluded.copy()
-    x_min, x_max, y_min, y_max = bounding_box(vertices, shape)
-    
     while True:
         for row in xrange(y_min, y_max):
             for col in xrange(x_min, x_max):
