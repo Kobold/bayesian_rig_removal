@@ -17,14 +17,14 @@ def downsample(arr, x=DOWNSAMPLING):
     """Returns m x n matrix ``a`` downsampled to a (m / 2^x) x (n / 2^x) matrix."""
     return misc.imresize(arr, 0.5 ** x, interp='bilinear', mode='F')
 
-def rig_matte((height, width), vectors):
+def rig_matte((height, width), vectors, dtype=np.float_):
     """
     height, width - dimensions of the output matrix
     vectors - a list of (x, y) tuple vectors that specify the vertices of a polygonal rig region
     """
     img = Image.new('L', (width, height), 1)
     ImageDraw.Draw(img).polygon(vectors, outline=0, fill=0)
-    return np.array(img, dtype=np.float_)
+    return np.array(img, dtype=dtype)
 
 
 def pl(w_n, w_compensated, I_n, I_compensated):
@@ -221,7 +221,86 @@ def temporal_interpolation_vectors(d_prev, candidates):
         c_row, c_col = np.array(index) - d_prev[index]
         if 0 <= c_row < rows and 0 <= c_col < cols:
             candidates[c_row, c_col].append(d_prev[index])
+
+#
+# Energy calculations
+#
+
+def E_l(x_r, x_r_prime, w_n, w_n_1, I_n, I_n_1):
+    """E_l - Image data likelihood (equation 9)
     
+    x_r
+        a rig site
+    w_n
+        continuous matrix. 1 indicates data available, 0 indicates data missing.
+        in the rig area w(x_r) = 0, i.e. this is the "not-rig" matrix
+    w_n_1: w_n-1
+        continuous matrix. 1 indicates data available, 0 indicates data missing.
+        in the rig area w(x_r) = 0, i.e. this is the "not-rig" matrix
+    I_n
+        frame at n
+    I_n_1: I_n-1
+        frame at n-1
+    """
+    temp = (1. / (2. * SIGMA_E ** 2.)) * \
+           w_n[x_r] * \
+           w_n_1[x_r_prime] * \
+           ((I_n[x_r] - I_n_1[x_r_prime]) ** 2.)
+    
+    return temp
+
+def E_0_t(x_r, x_r_prime, w_n_1, d_h, d_prev):
+    """E_0_t - Temporal smoothness (equation 9)
+
+    x_r:
+        a rig site
+    occlusion: o_n,n-1
+        binary matrix. 1 indicates data that that point in the frame n does not
+        exist in the frame n-1. 0 indicates no discontinuity
+    w_n_1: w_n-1
+        continuous matrix. 1 indicates data available, 0 indicates data missing.
+        in the rig area w(x_r) = 0, i.e. this is the "not-rig" matrix
+    d_h: d^h_n,n-1
+        vector matrix estimating the motion of the hidden area
+    d_prev: d_n-1,n-2
+        vector matrix with the motion mapping from frame n-1 to frame n-2
+    """
+    temp = (1. / SIGMA_V ** 2.) * \
+           w_n_1[x_r_prime] * \
+           linalg.norm(d_h[x_r] - d_prev[x_r_prime]) ** 2.
+
+    return temp
+
+def neighborhood((y, x), (height, width)):
+    return [(yt, xt) for xt in [x + 1, x, x - 1]
+                     for yt in [y + 1, y, y - 1]
+                     if 0 <= xt < width and 0 <= yt < height
+                     and (xt, yt) != (x, y)]
+
+def lambda_(s, x_r):
+    return LAMBDA / linalg.norm(np.array(s) - np.array(x_r))
+
+def E_s(x_r, d_h):
+    """E_s - Spatial motion smoothness (equation 9)"""
+    temp = sum(lambda_(s, x_r) * linalg.norm(d_h[x_r] - d_h[s]) ** 2.
+               for s in neighborhood(x_r, d_h.shape[:2]))
+
+    return temp
+
+def E_0_o(x_r, occlusion):
+    """E_0_o - Spatial occlusion smoothness"""
+    temp = sum(lambda_(s, x_r) * abs(occlusion[s]) ** 2.
+               for s in neighborhood(x_r, occlusion.shape[:2]))
+
+    return temp
+
+def E_1_o(x_r, occlusion):
+    """E_1_o - Spatial occlusion smoothness"""
+    temp = sum(lambda_(s, x_r) * abs(1. - occlusion[s]) ** 2.
+               for s in neighborhood(x_r, occlusion.shape[:2]))
+
+    return temp
+
 
 #
 # Tools
@@ -235,31 +314,104 @@ def vector_display(vf):
 
 
 if __name__ == '__main__':
-    load = lambda fname: downsample(ndimage.imread(fname, flatten=True))
-    im1 = load('Forest_Gump/001.png')
-    im2 = load('Forest_Gump/002.png')
-    im3 = load('Forest_Gump/003.png')
-
-    a = np.array(range(3*3)).reshape((3, 3))
-    
-    # calculate spatial interpolation vector
     displacement = load_d('vel_003_002')
+    shape = displacement.shape[:2]
+    
+    # calculate spatial interpolation vector (section 4.2)
     vertices = [(679, 270), (719, 264), (742, 339), (680, 340)]
     siv = spatial_interpolation_vector(displacement, vertices)
     
     # initialize the candidates for the motion with the spatial interpolation
-    candidates = np.empty(im1.shape, dtype=object)
+    candidates = np.empty(shape, dtype=object)
     for index, y in np.ndenumerate(candidates):
         candidates[index] = [siv]
     
+    # find temporal interpolation candidates (section 4.3)
     print 'candidate # =', sum(len(x) for x in candidates.flat)
     d_prev = load_d('vel_002_001')
     temporal_interpolation_vectors(d_prev, candidates)
     print 'candidate # =', sum(len(x) for x in candidates.flat)
     
+    # candidate evaluation (section 4.4)
+    occluded = np.logical_not(rig_matte(shape, vertices, dtype=bool))
+    new_occluded = occluded.copy()
+    d_h = np.where(np.dstack((occluded, occluded)),
+                   np.tile(siv, list(shape) + [1]), # initialize with spatial interp
+                   displacement)
+    new_d_h = d_h.copy()
+    
+    # w_n - weight field for frame 3
+    # w_n_1 - weight field for frame 2
+    w_n = rig_matte(shape, [(679, 270), (719, 264), (742, 339), (680, 340)])
+    w_n_1 = rig_matte(shape, [(679, 273), (726, 263), (740, 334), (679, 337)])
+    
+    load = lambda fname: ndimage.imread(fname, flatten=True) / 255.
+    im2 = load('Forest_Gump/002.png')
+    im3 = load('Forest_Gump/003.png')
+    
+    is_rig = occluded.copy()
+    x_min, x_max, y_min, y_max = bounding_box(vertices, shape)
+    
+    while True:
+        for row in xrange(y_min, y_max):
+            for col in xrange(x_min, x_max):
+                x_r = (row, col) # y, x
+                if is_rig[x_r]:
+                    minimum_energy = float('inf')
+                    best_candidate = None # the candidate associated with the minimum energy
+                    best_is_occluded = None
+                
+                    for candidate in candidates[row, col]:
+                        # the motion compensated site x_r' = x_r + d^h_n,n-1(x_r)
+                        x_r_prime = tuple((np.array(x_r) + candidate).round())
+                    
+                        el = E_l(x_r, x_r_prime, w_n, w_n_1, im3, im2)
+                        e0t = E_0_t(x_r, x_r_prime, w_n_1, d_h, d_prev)
+                        e1t = ALPHA
+                        es = E_s(x_r, d_h)
+                        e0o = E_0_o(x_r, occluded)
+                        e1o = E_1_o(x_r, occluded)
+                    
+                        e0 = el + e0t + es + e0o
+                        e1 = el + e1t + es + e1o
+                    
+                        if e0 < minimum_energy:
+                            minimum_energy = e0
+                            best_candidate = candidate
+                            best_is_occluded = False
+                        if e1 < minimum_energy:
+                            minimum_energy = e1
+                            best_candidate = candidate
+                            best_is_occluded = True
+                    
+                        #print x_r, d_h[x_r], '->', candidate, min(e0, e1)
+                        #print '\t', 'e0 = %f + %f + %f + %f = %f' % (el, e0t, es, e0o, e0)
+                        #print '\t', 'e1 = %f + %f + %f + %f = %f' % (el, e1t, es, e1o, e1)
+                
+                    if best_candidate is not None:
+                        new_d_h[x_r] = best_candidate
+                        new_occluded[x_r] = best_is_occluded
+        
+        if (occluded == new_occluded).all() and (d_h == new_d_h).all():
+            break
+        
+        print 'iterating again'
+        occluded = new_occluded
+        d_h = new_d_h
+    
+    
+    
+    #load = lambda fname: downsample(ndimage.imread(fname, flatten=True))
+    #im1 = load('Forest_Gump/001.png')
+    #im2 = load('Forest_Gump/002.png')
+    #im3 = load('Forest_Gump/003.png')
     #bob = main(im1, im2, im3)
 
     #plt.imshow(bob / bob.max(), cmap='gray')
     #plt.show()
     #import pdb
     #pdb.set_trace()
+    
+    a = np.array(range(3*3)).reshape((3, 3))
+    
+    
