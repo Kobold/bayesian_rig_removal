@@ -129,7 +129,7 @@ def main(im1, im2, im3):
     ImageDraw.Draw(img).polygon([(679, 270), (719, 264), (742, 339), (680, 340)], outline=1, fill=0)
     occlusion = np.array(img, dtype=np.float_)
     
-    d_prev = load_d_prev()
+    d_prev = load_d('vel_002_001')
     assert I_n.shape == d_prev.shape[:2]
     
     # ghetto build of estimate hidden motion
@@ -171,16 +171,16 @@ def main(im1, im2, im3):
     
     return pl_matrix * pt_matrix * ps_matrix * pso_matrix
 
-def load_d_prev():
-    """Loads the d_n-1,n-2 matrix from csv files. Returns a height x width x 2 matrix."""
-    d_prev_x = downsample(np.genfromtxt(file('d_prev_x.csv'), delimiter=','))
-    d_prev_y = downsample(np.genfromtxt(file('d_prev_y.csv'), delimiter=','))
+def load_d(prefix):
+    """Loads the displacement matrix from csv files. Returns a height x width x 2 matrix."""
+    vel_x = downsample(np.genfromtxt(file('%s_x.csv' % prefix), delimiter=','))
+    vel_y = downsample(np.genfromtxt(file('%s_y.csv' % prefix), delimiter=','))
 
     # make a 3d height x width x 2 matrix to hold the vectors
-    d_prev = np.zeros(list(d_prev_x.shape) + [2])
-    d_prev[:, :, 0] = d_prev_y # note, this y here is correct--and it's important it be this order
-    d_prev[:, :, 1] = d_prev_x
-    return d_prev
+    vel = np.zeros(list(vel_x.shape) + [2])
+    vel[:, :, 0] = vel_y # note, this y here is correct--and it's important it be this order
+    vel[:, :, 1] = vel_x
+    return vel
 
 def vector_weighted_average(vf, weights):
     """Returns the average vector of vector field ``vf``."""
@@ -244,7 +244,7 @@ if __name__ == '__main__':
     
     # calculate spatial interpolation vector
     vertices = [(679, 270), (719, 264), (742, 339), (680, 340)]
-    d_prev = load_d_prev()
+    d_prev = load_d('vel_002_001')
     siv = spatial_interpolation_vector(d_prev, vertices)
     
     # initialize the candidates for the motion with the spatial interpolation

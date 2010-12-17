@@ -41,8 +41,8 @@ CalcOpticalFlowLK(frame1, frame2, (5, 5), vel_x, vel_y)
 
 # dump the pixel velocities
 frame_pair = frame_string(from_file) + '_' + frame_string(to_file)
-x_writer = csv.writer(open('vel_x_%s.csv' % frame_pair, 'wb'))
-y_writer = csv.writer(open('vel_y_%s.csv' % frame_pair, 'wb'))
+x_writer = csv.writer(open('vel_%s_x.csv' % frame_pair, 'wb'))
+y_writer = csv.writer(open('vel_%s_y.csv' % frame_pair, 'wb'))
 for y in xrange(frame1.height):
     x_writer.writerow([GetReal2D(vel_x, y, x) for x in xrange(frame1.width)])
     y_writer.writerow([GetReal2D(vel_y, y, x) for x in xrange(frame1.width)])
