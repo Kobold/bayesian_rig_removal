@@ -414,7 +414,14 @@ if __name__ == '__main__':
         occluded = new_occluded
         d_h = new_d_h
     
-    
+    # reconstruct that shizzle
+    I_h = im3.copy()
+    for row in xrange(y_min, y_max):
+        for col in xrange(x_min, x_max):
+            x_r = (row, col)
+            if is_rig[x_r]:
+                x_r_prime = tuple((np.array(x_r) + d_h[x_r]).round())
+                I_h[x_r] = (w_n[x_r] * im3[x_r] + w_n_1[x_r_prime] * im2[x_r_prime]) / (w_n[x_r] + w_n_1[x_r_prime])
     
     #load = lambda fname: downsample(ndimage.imread(fname, flatten=True))
     #im1 = load('Forest_Gump/001.png')
