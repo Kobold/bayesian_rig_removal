@@ -213,6 +213,15 @@ def spatial_interpolation_vector(d, rig_vertices):
     return vector_weighted_average(d[y_min:y_max, x_min:x_max],
                                    matte[y_min:y_max, x_min:x_max])
 
+def temporal_interpolation_vectors(d_prev, candidates):
+    assert d_prev.shape[:2] == candidates.shape
+    
+    rows, cols = candidates.shape
+    for index, _ in np.ndenumerate(candidates):
+        c_row, c_col = np.array(index) - d_prev[index]
+        if 0 <= c_row < rows and 0 <= c_col < cols:
+            candidates[c_row, c_col].append(d_prev[index])
+    
 
 #
 # Tools
@@ -236,7 +245,16 @@ if __name__ == '__main__':
     # calculate spatial interpolation vector
     vertices = [(679, 270), (719, 264), (742, 339), (680, 340)]
     d_prev = load_d_prev()
-    print spatial_interpolation_vector(d_prev, vertices)
+    siv = spatial_interpolation_vector(d_prev, vertices)
+    
+    # initialize the candidates for the motion with the spatial interpolation
+    candidates = np.empty(im1.shape, dtype=object)
+    for index, y in np.ndenumerate(candidates):
+        candidates[index] = [siv]
+    
+    print 'candidate # =', sum(len(x) for x in candidates.flat)
+    temporal_interpolation_vectors(d_prev, candidates)
+    print 'candidate # =', sum(len(x) for x in candidates.flat)
     
     #bob = main(im1, im2, im3)
 
