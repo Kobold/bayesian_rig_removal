@@ -6,6 +6,7 @@ from PIL import Image, ImageDraw
 import matplotlib.pyplot as plt
 import math
 import numpy as np
+import os
 
 SIGMA_E = 0.01 # allowance of acceleration
 SIGMA_V = 0.01 # allowance of acceleration
@@ -209,7 +210,7 @@ def spatial_interpolation_vector(d, rig_vertices):
     """
     shape = d.shape[:2]
     x_min, x_max, y_min, y_max = bounding_box(rig_vertices, shape)
-    matte = rig_matte(shape, vertices)
+    matte = rig_matte(shape, rig_vertices)
     return vector_weighted_average(d[y_min:y_max, x_min:x_max],
                                    matte[y_min:y_max, x_min:x_max])
 
@@ -312,6 +313,15 @@ def vector_display(vf):
     plt.imshow(vf_mag / vf_mag.max(), cmap='gray', interpolation='nearest')
     plt.show()
 
+def parse_rig_vertices(f):
+    vertices_list = []
+    for line in f:
+        vertices = line.split()
+        point = [tuple(map(int, str_point.split(','))) for str_point in vertices]
+        vertices_list.append(point)
+    
+    return vertices_list
+
 def index_iterator((x_min, x_max, y_min, y_max)):
     for row in xrange(y_min, y_max):
         for col in xrange(x_min, x_max):
@@ -366,7 +376,7 @@ def reconstruct_frame(displacement, d_prev, vertices, w_n, w_n_1, I_n, I_n_1):
                     # the motion compensated site x_r' = x_r + d^h_n,n-1(x_r)
                     x_r_prime = tuple((np.array(x_r) + candidate).round())
                 
-                    el = E_l(x_r, x_r_prime, w_n, w_n_1, im3, im2)
+                    el = E_l(x_r, x_r_prime, w_n, w_n_1, I_n, I_n_1)
                     e0t = E_0_t(x_r, x_r_prime, w_n_1, candidate, d_prev)
                     e1t = ALPHA
                     es = E_s(x_r, candidate, d_h)
@@ -407,23 +417,26 @@ def reconstruct_frame(displacement, d_prev, vertices, w_n, w_n_1, I_n, I_n_1):
     
     return I_h
     
-    
 
 if __name__ == '__main__':
+    # load the images
     load = lambda fname: ndimage.imread(fname, flatten=True) / 255.
-    im2 = load('Forest_Gump/002.png')
-    im3 = load('Forest_Gump/003.png')
+    image_dir = 'Forest_Gump'
+    files = [os.path.join(image_dir, f) for f in os.listdir(image_dir) if f.endswith('.png')]
+    images = [load(f) for f in files]
     
-    shape = im3.shape
-    vertices = [(679, 270), (719, 264), (742, 339), (680, 340)]
+    # load the rig vertices
+    vertices_list = parse_rig_vertices(file('rig_data.txt'))
+    
+    shape = images[0].shape
     bob = reconstruct_frame(
-        load_d('vel_003_002'),
         load_d('vel_002_001'),
-        vertices,
-        rig_matte(shape, vertices),
-        rig_matte(shape, [(679, 273), (726, 263), (740, 334), (679, 337)]),
-        im3,
-        im2)
+        load_d('vel_001_000'),
+        vertices_list[2],
+        rig_matte(shape, vertices_list[2]),
+        rig_matte(shape, vertices_list[1]),
+        images[2],
+        images[1])
     
     #load = lambda fname: downsample(ndimage.imread(fname, flatten=True))
     #im1 = load('Forest_Gump/001.png')
