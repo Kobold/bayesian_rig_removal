@@ -37,7 +37,7 @@ frame2 = LoadImage(to_file, CV_LOAD_IMAGE_GRAYSCALE)
 # calculate optical flow
 vel_x = CreateImage((frame1.width, frame1.height), IPL_DEPTH_32F, 1)
 vel_y = CreateImage((frame1.width, frame1.height), IPL_DEPTH_32F, 1)
-CalcOpticalFlowLK(frame2, frame1, (5, 5), vel_x, vel_y)
+CalcOpticalFlowLK(frame1, frame2, (5, 5), vel_x, vel_y)
 
 # dump the pixel velocities
 frame_pair = frame_string(from_file) + '_' + frame_string(to_file)
