@@ -312,6 +312,10 @@ def vector_display(vf):
     plt.imshow(vf_mag / vf_mag.max(), cmap='gray', interpolation='nearest')
     plt.show()
 
+def index_iterator((x_min, x_max, y_min, y_max)):
+    for row in xrange(y_min, y_max):
+        for col in xrange(x_min, x_max):
+            yield (row, col)
 
 if __name__ == '__main__':
     displacement = load_d('vel_003_002')
@@ -338,15 +342,13 @@ if __name__ == '__main__':
     print 'adding additional candidates'
     w_n = rig_matte(shape, [(679, 270), (719, 264), (742, 339), (680, 340)])
     w_n_1 = rig_matte(shape, [(679, 273), (726, 263), (740, 334), (679, 337)])
-    x_min, x_max, y_min, y_max = bounding_box(vertices, shape)
-    for row in xrange(y_min, y_max):
-        for col in xrange(x_min, x_max):
-            x_r = (row, col)
-            if w_n[x_r] == 1:
-                candidate = displacement[x_r]
-                for s in neighborhood(x_r, shape):
-                    if w_n[s] < 1:
-                        candidates[s].append(candidate)
+    bounds = bounding_box(vertices, shape)
+    for x_r in index_iterator(bounds):
+        if w_n[x_r] == 1:
+            candidate = displacement[x_r]
+            for s in neighborhood(x_r, shape):
+                if w_n[s] < 1:
+                    candidates[s].append(candidate)
     print 'finished adding additional candidates'
     print 'candidate # =', sum(len(x) for x in candidates.flat)
     
@@ -365,45 +367,43 @@ if __name__ == '__main__':
     
     is_rig = occluded.copy()
     while True:
-        for row in xrange(y_min, y_max):
-            for col in xrange(x_min, x_max):
-                x_r = (row, col) # y, x
-                if is_rig[x_r]:
-                    minimum_energy = float('inf')
-                    best_candidate = None # the candidate associated with the minimum energy
-                    best_is_occluded = None
+        for x_r in index_iterator(bounds):
+            if is_rig[x_r]:
+                minimum_energy = float('inf')
+                best_candidate = None # the candidate associated with the minimum energy
+                best_is_occluded = None
+            
+                for candidate in candidates[x_r]:
+                    # the motion compensated site x_r' = x_r + d^h_n,n-1(x_r)
+                    x_r_prime = tuple((np.array(x_r) + candidate).round())
                 
-                    for candidate in candidates[row, col]:
-                        # the motion compensated site x_r' = x_r + d^h_n,n-1(x_r)
-                        x_r_prime = tuple((np.array(x_r) + candidate).round())
-                    
-                        el = E_l(x_r, x_r_prime, w_n, w_n_1, im3, im2)
-                        e0t = E_0_t(x_r, x_r_prime, w_n_1, candidate, d_prev)
-                        e1t = ALPHA
-                        es = E_s(x_r, candidate, d_h)
-                        e0o = E_0_o(x_r, occluded)
-                        e1o = E_1_o(x_r, occluded)
-                    
-                        e0 = el + e0t + es + e0o
-                        e1 = el + e1t + es + e1o
-                    
-                        if e0 < minimum_energy:
-                            minimum_energy = e0
-                            best_candidate = candidate
-                            best_is_occluded = False
-                        if e1 < minimum_energy:
-                            minimum_energy = e1
-                            best_candidate = candidate
-                            best_is_occluded = True
-                        
-                        #if e0 < e1:
-                        #    print x_r, d_h[x_r], '->', candidate, min(e0, e1)
-                        #    print '\t', 'e0 = %f + %f + %f + %f = %f' % (el, e0t, es, e0o, e0)
-                        #    print '\t', 'e1 = %f + %f + %f + %f = %f' % (el, e1t, es, e1o, e1)
+                    el = E_l(x_r, x_r_prime, w_n, w_n_1, im3, im2)
+                    e0t = E_0_t(x_r, x_r_prime, w_n_1, candidate, d_prev)
+                    e1t = ALPHA
+                    es = E_s(x_r, candidate, d_h)
+                    e0o = E_0_o(x_r, occluded)
+                    e1o = E_1_o(x_r, occluded)
                 
-                    if best_candidate is not None:
-                        new_d_h[x_r] = best_candidate
-                        new_occluded[x_r] = best_is_occluded
+                    e0 = el + e0t + es + e0o
+                    e1 = el + e1t + es + e1o
+                
+                    if e0 < minimum_energy:
+                        minimum_energy = e0
+                        best_candidate = candidate
+                        best_is_occluded = False
+                    if e1 < minimum_energy:
+                        minimum_energy = e1
+                        best_candidate = candidate
+                        best_is_occluded = True
+                    
+                    #if e0 < e1:
+                    #    print x_r, d_h[x_r], '->', candidate, min(e0, e1)
+                    #    print '\t', 'e0 = %f + %f + %f + %f = %f' % (el, e0t, es, e0o, e0)
+                    #    print '\t', 'e1 = %f + %f + %f + %f = %f' % (el, e1t, es, e1o, e1)
+            
+                if best_candidate is not None:
+                    new_d_h[x_r] = best_candidate
+                    new_occluded[x_r] = best_is_occluded
         
         print 'occluded changed:', (occluded != new_occluded).sum()
         print 'd_h changed:', (d_h != new_d_h).sum()
@@ -416,12 +416,10 @@ if __name__ == '__main__':
     
     # reconstruct that shizzle
     I_h = im3.copy()
-    for row in xrange(y_min, y_max):
-        for col in xrange(x_min, x_max):
-            x_r = (row, col)
-            if is_rig[x_r]:
-                x_r_prime = tuple((np.array(x_r) + d_h[x_r]).round())
-                I_h[x_r] = (w_n[x_r] * im3[x_r] + w_n_1[x_r_prime] * im2[x_r_prime]) / (w_n[x_r] + w_n_1[x_r_prime])
+    for x_r in index_iterator(bounds):
+        if is_rig[x_r]:
+            x_r_prime = tuple((np.array(x_r) + d_h[x_r]).round())
+            I_h[x_r] = (w_n[x_r] * im3[x_r] + w_n_1[x_r_prime] * im2[x_r_prime]) / (w_n[x_r] + w_n_1[x_r_prime])
     
     #load = lambda fname: downsample(ndimage.imread(fname, flatten=True))
     #im1 = load('Forest_Gump/001.png')
