@@ -1,0 +1,22 @@
+EECS 442 Project - Rig Removal
+
+Andy Kish
+Nicholas Peters
+Josh Winters
+
+Necessary python libraries:
+OpenCV python bindings
+SciPy
+
+Two inputs are needed to do rig removal:
+1. Input PNG movie frames in the "Forest_Gump" directory.
+2. The rig region for each frame in "rig_data.txt". Each line is for a single
+   frame and each x,y pair specifies a vertex for the polygon surrounding the
+   rig.
+
+To actually do the rig removal:
+1. Run "python optical_flow.py". It uses LK optical flow to determine the motion
+   between pairs of frames.
+2. Run "python main.py". Using the given images, rig region vertices, and optical
+   flow displacements--main.py does the actual job of rig removal. The final
+   output frames will be created in a directory "out".
