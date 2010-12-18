@@ -427,7 +427,13 @@ def reconstruct_frame(displacement, d_prev, vertices, w_n, w_n_1, I_n, I_n_1):
             x_r_prime = tuple((np.array(x_r) + d_h[x_r]).round())
             I_h[x_r] = (w_n[x_r] * I_n[x_r] + w_n_1[x_r_prime] * I_n_1[x_r_prime]) / (w_n[x_r] + w_n_1[x_r_prime])
     
-    return I_h
+    w_h = w_n.copy()
+    for x_r in index_iterator(bounds):
+        if is_rig[x_r]:
+            x_r_prime = tuple((np.array(x_r) + d_h[x_r]).round())
+            w_h[x_r] = (w_n[x_r] + w_n_1[x_r_prime]) / 2.
+    
+    return I_h, w_h
     
 
 if __name__ == '__main__':
@@ -438,9 +444,12 @@ if __name__ == '__main__':
     files = [os.path.join(image_dir, f) for f in os.listdir(image_dir) if f.endswith('.png')]
     images = [load(f) for f in files]
     
+    shape = images[0].shape
+    
     # load the rig vertices
     print 'loading vertices'
     vertices_list = parse_rig_vertices(file('rig_data.txt'))
+    weights = [rig_matte(shape, v) for v in vertices_list]
     
     # load the displacements
     print 'loading displacements'
@@ -451,17 +460,21 @@ if __name__ == '__main__':
                      for dn in sorted(displacement_names)]
     
     print 'reconstructing frames'
-    shape = images[0].shape
-    bob = reconstruct_frame(
-        displacements[1],
-        displacements[0],
-        vertices_list[2],
-        rig_matte(shape, vertices_list[2]),
-        rig_matte(shape, vertices_list[1]),
-        images[2],
-        images[1])
-    
-    save_image('002.png', bob)
+    for i in range(3):
+        print '\nreconstructing frame', i
+        im, w_h = reconstruct_frame(
+            displacements[i+1],
+            displacements[i],
+            vertices_list[i+2],
+            weights[i+2],
+            weights[i+1],
+            images[i+2],
+            images[i+1])
+        save_image('%03d.png' % (i + 2), im)
+        
+        images[i+2] = im
+        weights[i+2] = w_h
+        
     
     #plt.imshow(images[2] * rig_matte(shape, vertices_list[2]), cmap='gray')
     #plt.imshow(bob, cmap='gray')
