@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 import math
 import numpy as np
 import os
+import re
 
 SIGMA_E = 0.01 # allowance of acceleration
 SIGMA_V = 0.01 # allowance of acceleration
@@ -313,6 +314,12 @@ def vector_display(vf):
     plt.imshow(vf_mag / vf_mag.max(), cmap='gray', interpolation='nearest')
     plt.show()
 
+def save_image(filename, matrix):
+    im = Image.new('L', list(reversed(matrix.shape)))
+    data = np.floor(np.ravel(matrix) * 256)
+    im.putdata(data)
+    im.save(filename)
+
 def parse_rig_vertices(f):
     vertices_list = []
     for line in f:
@@ -321,6 +328,11 @@ def parse_rig_vertices(f):
         vertices_list.append(point)
     
     return vertices_list
+
+def frame_string(path):
+    """Extracts a frame string like '004' from a path like 'Forest_Gump/004.png'."""
+    filename = os.path.split(path)[1]
+    return os.path.splitext(filename)[0]
 
 def index_iterator((x_min, x_max, y_min, y_max)):
     for row in xrange(y_min, y_max):
@@ -420,23 +432,40 @@ def reconstruct_frame(displacement, d_prev, vertices, w_n, w_n_1, I_n, I_n_1):
 
 if __name__ == '__main__':
     # load the images
+    print 'loading images'
     load = lambda fname: ndimage.imread(fname, flatten=True) / 255.
     image_dir = 'Forest_Gump'
     files = [os.path.join(image_dir, f) for f in os.listdir(image_dir) if f.endswith('.png')]
     images = [load(f) for f in files]
     
     # load the rig vertices
+    print 'loading vertices'
     vertices_list = parse_rig_vertices(file('rig_data.txt'))
     
+    # load the displacements
+    print 'loading displacements'
+    displacement_dir = 'displacement'
+    displacement_names = set(re.findall(r'\d{3}_\d{3}', f)[0]
+                             for f in os.listdir(displacement_dir) if f.endswith('.csv'))
+    displacements = [load_d(os.path.join(displacement_dir, dn))
+                     for dn in sorted(displacement_names)]
+    
+    print 'reconstructing frames'
     shape = images[0].shape
     bob = reconstruct_frame(
-        load_d('vel_002_001'),
-        load_d('vel_001_000'),
+        displacements[1],
+        displacements[0],
         vertices_list[2],
         rig_matte(shape, vertices_list[2]),
         rig_matte(shape, vertices_list[1]),
         images[2],
         images[1])
+    
+    save_image('002.png', bob)
+    
+    #plt.imshow(images[2] * rig_matte(shape, vertices_list[2]), cmap='gray')
+    #plt.imshow(bob, cmap='gray')
+    #matplotlib.savefig('out.png')
     
     #load = lambda fname: downsample(ndimage.imread(fname, flatten=True))
     #im1 = load('Forest_Gump/001.png')
