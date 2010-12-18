@@ -1,6 +1,6 @@
 #!/usr/bin/python2.6
 from matplotlib import nxutils
-from scipy import misc, ndimage
+from scipy import ndimage
 from numpy import linalg
 from PIL import Image, ImageDraw
 import matplotlib.pyplot as plt
@@ -13,11 +13,7 @@ SIGMA_E = 0.01 # allowance of acceleration
 SIGMA_V = 0.01 # allowance of acceleration
 LAMBDA = 2.0
 ALPHA = 0.0331 # ~ 3 * SIGMA_V according to section 3.4
-DOWNSAMPLING = 0
 
-def downsample(arr, x=DOWNSAMPLING):
-    """Returns m x n matrix ``a`` downsampled to a (m / 2^x) x (n / 2^x) matrix."""
-    return misc.imresize(arr, 0.5 ** x, interp='bilinear', mode='F')
 
 def rig_matte((height, width), vectors, dtype=np.float_):
     """
@@ -175,8 +171,8 @@ def main(im1, im2, im3):
 
 def load_d(prefix):
     """Loads the displacement matrix from csv files. Returns a height x width x 2 matrix."""
-    vel_x = downsample(np.genfromtxt(file('%s_x.csv' % prefix), delimiter=','))
-    vel_y = downsample(np.genfromtxt(file('%s_y.csv' % prefix), delimiter=','))
+    vel_x = np.genfromtxt(file('%s_x.csv' % prefix), delimiter=',')
+    vel_y = np.genfromtxt(file('%s_y.csv' % prefix), delimiter=',')
 
     # make a 3d height x width x 2 matrix to hold the vectors
     vel = np.zeros(list(vel_x.shape) + [2])
