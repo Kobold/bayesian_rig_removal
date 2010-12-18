@@ -377,48 +377,43 @@ def reconstruct_frame(displacement, d_prev, vertices, w_n, w_n_1, I_n, I_n_1):
     new_occluded = occluded.copy()
     new_d_h = d_h.copy()
     is_rig = occluded.copy()
-    while True:
-        for x_r in index_iterator(bounds):
-            if is_rig[x_r]:
-                minimum_energy = float('inf')
-                best_candidate = None # the candidate associated with the minimum energy
-                best_is_occluded = None
-            
-                for candidate in candidates[x_r]:
-                    # the motion compensated site x_r' = x_r + d^h_n,n-1(x_r)
-                    x_r_prime = tuple((np.array(x_r) + candidate).round())
-                
-                    el = E_l(x_r, x_r_prime, w_n, w_n_1, I_n, I_n_1)
-                    e0t = E_0_t(x_r, x_r_prime, w_n_1, candidate, d_prev)
-                    e1t = ALPHA
-                    es = E_s(x_r, candidate, d_h)
-                    e0o = E_0_o(x_r, occluded)
-                    e1o = E_1_o(x_r, occluded)
-                
-                    e0 = el + e0t + es + e0o
-                    e1 = el + e1t + es + e1o
-                
-                    if e0 < minimum_energy:
-                        minimum_energy = e0
-                        best_candidate = candidate
-                        best_is_occluded = False
-                    if e1 < minimum_energy:
-                        minimum_energy = e1
-                        best_candidate = candidate
-                        best_is_occluded = True
-            
-                if best_candidate is not None:
-                    new_d_h[x_r] = best_candidate
-                    new_occluded[x_r] = best_is_occluded
+    for x_r in index_iterator(bounds):
+        if is_rig[x_r]:
+            minimum_energy = float('inf')
+            best_candidate = None # the candidate associated with the minimum energy
+            best_is_occluded = None
         
-        print 'occluded changed:', (occluded != new_occluded).sum()
-        print 'd_h changed:', (d_h != new_d_h).sum()
-        if (occluded == new_occluded).all() and (d_h == new_d_h).all():
-            break
+            for candidate in candidates[x_r]:
+                # the motion compensated site x_r' = x_r + d^h_n,n-1(x_r)
+                x_r_prime = tuple((np.array(x_r) + candidate).round())
+            
+                el = E_l(x_r, x_r_prime, w_n, w_n_1, I_n, I_n_1)
+                e0t = E_0_t(x_r, x_r_prime, w_n_1, candidate, d_prev)
+                e1t = ALPHA
+                es = E_s(x_r, candidate, d_h)
+                e0o = E_0_o(x_r, occluded)
+                e1o = E_1_o(x_r, occluded)
+            
+                e0 = el + e0t + es + e0o
+                e1 = el + e1t + es + e1o
+            
+                if e0 < minimum_energy:
+                    minimum_energy = e0
+                    best_candidate = candidate
+                    best_is_occluded = False
+                if e1 < minimum_energy:
+                    minimum_energy = e1
+                    best_candidate = candidate
+                    best_is_occluded = True
         
-        print 'iterating again'
-        occluded = new_occluded
-        d_h = new_d_h
+            if best_candidate is not None:
+                new_d_h[x_r] = best_candidate
+                new_occluded[x_r] = best_is_occluded
+    
+    print 'occluded changed:', (occluded != new_occluded).sum()
+    print 'd_h changed:', (d_h != new_d_h).sum()
+    occluded = new_occluded
+    d_h = new_d_h
     
     # reconstruct that shizzle
     I_h = I_n.copy()
@@ -460,7 +455,7 @@ if __name__ == '__main__':
                      for dn in sorted(displacement_names)]
     
     print 'reconstructing frames'
-    for i in range(3):
+    for i in xrange(len(images)-2):
         print '\nreconstructing frame', i
         im, w_h = reconstruct_frame(
             displacements[i+1],
